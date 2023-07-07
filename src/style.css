@@ -1,0 +1,22 @@
+*,
+*::after,
+*::before {
+  margin: 0;
+  box-sizing: border-box;
+}
+body {
+  width: 100vw;
+  height: 100vh;
+  background-color: #cacaca;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#canvas {
+  border: 1px solid #393939;
+  height: 600px;
+  width: 800px;
+  background: url("images/background.jpg");
+  background-size: cover;
+}
