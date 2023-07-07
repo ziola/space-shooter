@@ -27,9 +27,9 @@ class Game {
     this.player = new Player(this);
     this.player.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
   }
-  render(ctx: CanvasRenderingContext2D, deltaTime: number) {
+  render(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
-    this.player?.render(ctx, deltaTime);
+    this.player?.render(ctx);
   }
   update(deltaTime: number) {
     this.player?.update(deltaTime);
@@ -74,39 +74,50 @@ class Player {
   }
 
   update(deltaTime: number) {
-    if (
-      this.game.keyboardInputController.isPressed("LEFT") &&
-      this.x - this.width * 0.5 - this.speed >= 0
-    ) {
-      this.x -= this.speed;
-    }
-    if (
-      this.game.keyboardInputController.isPressed("RIGHT") &&
-      this.x + this.width * 0.5 + this.speed <= this.game.width
-    ) {
-      this.x += this.speed;
-    }
-    if (
-      this.game.keyboardInputController.isPressed("UP") &&
-      this.y - this.height * 0.5 - this.speed >= 0
-    ) {
-      this.y -= this.speed;
-    }
-    if (
-      this.game.keyboardInputController.isPressed("DOWN") &&
-      this.y + this.height * 0.5 + this.speed <= this.game.height
-    ) {
-      this.y += this.speed;
-    }
+    let rotationDirection = 0;
     if (this.game.keyboardInputController.isPressed("ROTATE_LEFT")) {
-      this.angle -= this.rotationSpeed;
+      rotationDirection = -1;
     }
     if (this.game.keyboardInputController.isPressed("ROTATE_RIGHT")) {
-      this.angle += this.rotationSpeed;
+      rotationDirection = 1;
     }
+    this.angle += this.rotationSpeed * rotationDirection;
+
+    let horizontalDirection = 0;
+    let verticalDirection = 0;
+    if (this.game.keyboardInputController.isPressed("RIGHT")) {
+      horizontalDirection = Math.cos(this.angle);
+      verticalDirection = Math.sin(this.angle);
+    }
+    if (this.game.keyboardInputController.isPressed("LEFT")) {
+      horizontalDirection = -Math.cos(this.angle);
+      verticalDirection = -Math.sin(this.angle);
+    }
+    if (this.game.keyboardInputController.isPressed("UP")) {
+      horizontalDirection = Math.sin(this.angle);
+      verticalDirection = -Math.cos(this.angle);
+    }
+    if (this.game.keyboardInputController.isPressed("DOWN")) {
+      horizontalDirection = -Math.sin(this.angle);
+      verticalDirection = Math.cos(this.angle);
+    }
+    this.x = Math.max(
+      this.width * 0.5,
+      Math.min(
+        this.x + this.speed * horizontalDirection,
+        this.game.width - this.width * 0.5
+      )
+    );
+    this.y = Math.max(
+      this.height * 0.5,
+      Math.min(
+        this.y + this.speed * verticalDirection,
+        this.game.height - this.height * 0.5
+      )
+    );
   }
 
-  render(ctx: CanvasRenderingContext2D, deltaTime: number) {
+  render(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
@@ -116,6 +127,8 @@ class Player {
       this.width,
       this.height
     );
+    ctx.fillStyle = "blue";
+    ctx.fillRect(-5, -this.height * 0.5 + 5, 10, 10);
     ctx.restore();
   }
 }
@@ -184,7 +197,7 @@ function animate(currentTime: number) {
   const deltaTime = currentTime - lastTime;
   lastTime = currentTime;
   game.update(deltaTime);
-  game.render(context!, deltaTime);
+  game.render(context!);
   requestAnimationFrame(animate);
 }
 
