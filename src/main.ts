@@ -12,10 +12,12 @@ context.fillStyle = "pink";
 
 class Game {
   player: Player | null;
+  projectiles: Projectile[];
   enemies: Enemy[];
   height: number;
   width: number;
   keyboardInputController: KeyboardInputController;
+  private timeFromLastEnemySpawned = 0; // time from last enemy spawned
   private enemySpawnFrequency = 1000; // delay between enemies
   private maxEnemies = 5; //maximal number of enemies present at one time
 
@@ -23,6 +25,7 @@ class Game {
     this.height = height;
     this.width = width;
     this.player = null;
+    this.projectiles = [];
     this.enemies = [];
     this.keyboardInputController = new KeyboardInputController();
   }
@@ -30,15 +33,18 @@ class Game {
     this.keyboardInputController.init();
     this.player = new Player(this);
     this.player.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
+    this.projectiles = [];
     this.enemies = [];
   }
   render(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
     this.player?.render(ctx);
+    this.projectiles.forEach((projectile) => projectile.render(ctx));
     this.enemies.forEach((enemy) => enemy.render(ctx));
   }
   update(deltaTime: number) {
     this.player?.update(deltaTime);
+    this.projectiles.forEach((projectile) => projectile.update(deltaTime));
     this.enemies.forEach((enemy) => enemy.update(deltaTime));
     if (
       this.timeFromLastEnemySpawned < this.enemySpawnFrequency ||
@@ -58,6 +64,16 @@ class Game {
       );
       this.addEnemy(enemy);
     }
+  }
+  addProjectile(projectile: Projectile) {
+    this.projectiles.push(projectile);
+  }
+  removeProjectile(projectile: Projectile) {
+    const projectileIndex = this.projectiles.indexOf(projectile);
+    if (projectileIndex === -1) {
+      return;
+    }
+    this.projectiles.splice(projectileIndex, 1);
   }
   addEnemy(enemy: Enemy) {
     this.enemies.push(enemy);
@@ -80,6 +96,8 @@ class Player {
   private speed: number;
   private direction: number;
   private rotationSpeed: number; // in radians
+  private timeFromLastProjectile = Infinity; // time from last projectile spawned
+  private projectileFireFrequency = 250; // delay between projectiles
 
   constructor(game: Game) {
     this.game = game;
@@ -150,6 +168,16 @@ class Player {
         this.game.height - this.height * 0.5
       )
     );
+    if (game.keyboardInputController.isPressed("FIRE")) {
+      if (this.timeFromLastProjectile < this.projectileFireFrequency) {
+        this.timeFromLastProjectile += deltaTime;
+      } else {
+        const projectile = new Projectile(this.game);
+        projectile.init(this.x, this.y, 5, 5, this.direction, 10);
+        this.game.addProjectile(projectile);
+        this.timeFromLastProjectile = 0;
+      }
+    }
   }
 
   render(ctx: CanvasRenderingContext2D) {
@@ -241,6 +269,79 @@ class Enemy {
     ctx.restore();
   }
 }
+class Projectile {
+  private game: Game;
+  private x: number;
+  private y: number;
+  private width: number;
+  private height: number;
+  private speed: number;
+  private direction: number;
+
+  constructor(game: Game) {
+    this.game = game;
+    this.direction = 0;
+    this.x = -Infinity;
+    this.y = -Infinity;
+    this.width = 0;
+    this.height = 0;
+    this.speed = 0;
+  }
+
+  init(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    direction: number,
+    speed: number
+  ) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.direction = direction;
+    this.speed = speed;
+  }
+
+  update(deltaTime: number) {
+    const horizontalDirection = Math.sin(this.direction);
+    const newX = this.x + this.speed * horizontalDirection;
+    if (
+      this.width * 0.5 <= newX &&
+      newX <= this.game.width - this.width * 0.5
+    ) {
+      this.x = newX;
+    } else {
+      this.game.removeProjectile(this);
+    }
+    const verticalDirection = -Math.cos(this.direction);
+    const newY = this.y + this.speed * verticalDirection;
+    if (
+      this.height * 0.5 <= newY &&
+      newY <= this.game.height - this.height * 0.5
+    ) {
+      this.y = newY;
+    } else {
+      this.game.removeProjectile(this);
+    }
+  }
+
+  render(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.direction);
+    ctx.fillStyle = "yellow";
+    ctx.fillRect(
+      -this.width * 0.5,
+      -this.height * 0.5,
+      this.width,
+      this.height
+    );
+    ctx.restore();
+  }
+}
+
 const CONTROLS = {
   UP: "w",
   DOWN: "s",
@@ -248,6 +349,7 @@ const CONTROLS = {
   RIGHT: "d",
   ROTATE_LEFT: "q",
   ROTATE_RIGHT: "e",
+  FIRE: " ",
 } as const;
 
 const CONTROLS_BUTTONS = {
@@ -257,6 +359,7 @@ const CONTROLS_BUTTONS = {
   [CONTROLS.RIGHT]: "RIGHT",
   [CONTROLS.ROTATE_LEFT]: "ROTATE_LEFT",
   [CONTROLS.ROTATE_RIGHT]: "ROTATE_RIGHT",
+  [CONTROLS.FIRE]: "FIRE",
 } as const;
 
 class KeyboardInputController {
@@ -267,6 +370,7 @@ class KeyboardInputController {
   init() {
     document.addEventListener("keydown", (e: KeyboardEvent) => {
       switch (e.key) {
+        case CONTROLS.FIRE:
         case CONTROLS.UP:
         case CONTROLS.DOWN:
         case CONTROLS.LEFT:
@@ -280,6 +384,7 @@ class KeyboardInputController {
     });
     document.addEventListener("keyup", (e: KeyboardEvent) => {
       switch (e.key) {
+        case CONTROLS.FIRE:
         case CONTROLS.UP:
         case CONTROLS.DOWN:
         case CONTROLS.LEFT:
