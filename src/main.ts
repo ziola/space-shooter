@@ -227,31 +227,28 @@ class Enemy {
     this.y = y;
     this.width = width;
     this.height = height;
-    this.direction = direction;
+    this.direction = (direction * Math.PI) / 180;
     this.speed = speed;
   }
   update(deltaTime: number) {
-    const horizontalDirection = Math.sin(this.direction);
-    const newX = this.x + this.speed * horizontalDirection;
-    if (
-      this.width * 0.5 <= newX &&
-      newX <= this.game.width - this.width * 0.5
-    ) {
+    const xDistance = this.speed * Math.sin(this.direction);
+    const newX = this.x + xDistance;
+    const halfWidth = this.width * 0.5;
+    if (halfWidth <= newX && newX <= this.game.width - halfWidth) {
       this.x = newX;
     } else {
-      this.game.removeEnemy(this);
-      //TODO: change to some form of oposite movement
+      this.x -= xDistance;
+      this.direction *= -1;
     }
-    const verticalDirection = -Math.cos(this.direction);
-    const newY = this.y + this.speed * verticalDirection;
-    if (
-      this.height * 0.5 <= newY &&
-      newY <= this.game.height - this.height * 0.5
-    ) {
+    const yDistance = this.speed * -Math.cos(this.direction);
+    const newY = this.y + yDistance;
+    const halfHeight = this.height * 0.5;
+    if (halfHeight <= newY && newY <= this.game.height - halfHeight) {
       this.y = newY;
     } else {
-      this.game.removeEnemy(this);
-      //TODO: change to some form of oposite movement
+      this.y -= yDistance;
+      this.direction =
+        (this.direction >= 0 ? Math.PI : -Math.PI) - this.direction;
     }
   }
 
@@ -266,6 +263,8 @@ class Enemy {
       this.width,
       this.height
     );
+    ctx.fillStyle = "green";
+    ctx.fillRect(-5, -this.height * 0.5, 10, 10);
     ctx.restore();
   }
 }
