@@ -53,13 +53,38 @@ class Game {
       this.timeFromLastEnemySpawned += deltaTime;
     } else {
       const enemy = new Enemy(this);
+      const randomValue = getRandom();
+      let initialX;
+      let initialY;
+      let direction;
+      if (randomValue < 0.25) {
+        // from top
+        initialX = getRandom(25, this.width - 25);
+        initialY = 25;
+        direction = Math.floor(getRandom(91, 269));
+      } else if (randomValue < 0.5) {
+        // from right
+        initialX = this.width - 25;
+        initialY = getRandom(20, this.height - 25);
+        direction = Math.floor(getRandom(181, 359));
+      } else if (randomValue < 0.75) {
+        // from bottom
+        initialX = getRandom(20, this.width - 25);
+        initialY = this.height - 25;
+        direction = Math.floor(getRandom(-271, 89));
+      } else {
+        // from left
+        initialX = 25;
+        initialY = getRandom(25, this.height - 25);
+        direction = Math.floor(getRandom(1, 179));
+      }
+
       enemy.init(
-        //TODO: spawn ememies only at border moving invard
-        getRandom(50, this.width - 50),
-        getRandom(50, this.height - 50),
+        initialX,
+        initialY,
         25,
         25,
-        Math.floor(getRandom(0, 360)),
+        direction,
         Math.floor(getRandom(1, 5))
       );
       this.addEnemy(enemy);
