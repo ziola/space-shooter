@@ -161,37 +161,31 @@ class Player {
     }
     this.direction += this.rotationSpeed * rotationDirection;
 
-    let horizontalDirection = 0;
-    let verticalDirection = 0;
+    let xMove = 0;
+    let yMove = 0;
     if (this.game.keyboardInputController.isPressed("RIGHT")) {
-      horizontalDirection = Math.cos(this.direction);
-      verticalDirection = Math.sin(this.direction);
+      xMove += Math.cos(this.direction) * this.speed;
+      yMove += Math.sin(this.direction) * this.speed;
     }
     if (this.game.keyboardInputController.isPressed("LEFT")) {
-      horizontalDirection = -Math.cos(this.direction);
-      verticalDirection = -Math.sin(this.direction);
+      xMove += -Math.cos(this.direction) * this.speed;
+      yMove += -Math.sin(this.direction) * this.speed;
     }
     if (this.game.keyboardInputController.isPressed("UP")) {
-      horizontalDirection = Math.sin(this.direction);
-      verticalDirection = -Math.cos(this.direction);
+      xMove += Math.sin(this.direction) * this.speed;
+      yMove += -Math.cos(this.direction) * this.speed;
     }
     if (this.game.keyboardInputController.isPressed("DOWN")) {
-      horizontalDirection = -Math.sin(this.direction);
-      verticalDirection = Math.cos(this.direction);
+      xMove += -Math.sin(this.direction) * this.speed;
+      yMove += Math.cos(this.direction) * this.speed;
     }
     this.x = Math.max(
       this.width * 0.5,
-      Math.min(
-        this.x + this.speed * horizontalDirection,
-        this.game.width - this.width * 0.5
-      )
+      Math.min(this.x + xMove, this.game.width - this.width * 0.5)
     );
     this.y = Math.max(
       this.height * 0.5,
-      Math.min(
-        this.y + this.speed * verticalDirection,
-        this.game.height - this.height * 0.5
-      )
+      Math.min(this.y + yMove, this.game.height - this.height * 0.5)
     );
     if (game.keyboardInputController.isPressed("FIRE")) {
       if (this.timeFromLastProjectile < this.projectileFireFrequency) {
