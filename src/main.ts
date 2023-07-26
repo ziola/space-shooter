@@ -11,12 +11,13 @@ if (!context) {
 context.fillStyle = "pink";
 
 class Game {
-  player: Player | null;
+  player: Player;
   projectiles: Projectile[];
   enemies: Enemy[];
   height: number;
   width: number;
   keyboardInputController: KeyboardInputController;
+  isRunning = false;
   private timeFromLastEnemySpawned = 0; // time from last enemy spawned
   private enemySpawnFrequency = 1000; // delay between enemies
   private maxEnemies = 5; //maximal number of enemies present at one time
@@ -24,26 +25,23 @@ class Game {
   constructor(width: number, height: number) {
     this.height = height;
     this.width = width;
-    this.player = null;
+    this.player = new Player(this);
     this.projectiles = [];
     this.enemies = [];
     this.keyboardInputController = new KeyboardInputController();
   }
   init() {
     this.keyboardInputController.init();
-    this.player = new Player(this);
-    this.player.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
-    this.projectiles = [];
-    this.enemies = [];
+    this.startGame();
   }
   render(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
-    this.player?.render(ctx);
+    this.player.render(ctx);
     this.projectiles.forEach((projectile) => projectile.render(ctx));
     this.enemies.forEach((enemy) => enemy.render(ctx));
   }
   update(deltaTime: number) {
-    this.player?.update(deltaTime);
+    this.player.update(deltaTime);
     this.projectiles.forEach((projectile) => projectile.update(deltaTime));
     this.enemies.forEach((enemy) => enemy.update(deltaTime));
     this.spawnEnemy(deltaTime);
@@ -54,44 +52,17 @@ class Game {
       this.enemies.length >= this.maxEnemies
     ) {
       this.timeFromLastEnemySpawned += deltaTime;
-    } else {
-      const enemy = new Enemy(this);
-      const randomValue = getRandom();
-      let initialX;
-      let initialY;
-      let direction;
-      if (randomValue < 0.25) {
-        // from top
-        initialX = getRandom(25, this.width - 25);
-        initialY = 25;
-        direction = Math.floor(getRandom(91, 269));
-      } else if (randomValue < 0.5) {
-        // from right
-        initialX = this.width - 25;
-        initialY = getRandom(20, this.height - 25);
-        direction = Math.floor(getRandom(181, 359));
-      } else if (randomValue < 0.75) {
-        // from bottom
-        initialX = getRandom(20, this.width - 25);
-        initialY = this.height - 25;
-        direction = Math.floor(getRandom(-271, 89));
-      } else {
-        // from left
-        initialX = 25;
-        initialY = getRandom(25, this.height - 25);
-        direction = Math.floor(getRandom(1, 179));
-      }
-
-      enemy.init(
-        initialX,
-        initialY,
-        25,
-        25,
-        direction,
-        Math.floor(getRandom(1, 5))
-      );
-      this.addEnemy(enemy);
+      return;
     }
+    const enemy = new Enemy(this);
+    const { x, y, direction } = calculateSpawnPoint({
+      width: this.width,
+      height: this.height,
+    });
+
+    enemy.init(x, y, 25, 25, direction, Math.floor(getRandom(1, 5)));
+    this.addEnemy(enemy);
+    this.timeFromLastEnemySpawned = 0;
   }
 
   addProjectile(projectile: Projectile) {
@@ -116,8 +87,21 @@ class Game {
     this.timeFromLastEnemySpawned = 0;
   }
 
+  startGame() {
+    this.keyboardInputController.init();
+    this.player.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
+    this.projectiles = [];
+    this.enemies = [];
+    this.isRunning = true;
+  }
+
   endGame() {
-    alert("You lose!");
+    this.keyboardInputController.reset();
+    if (confirm("You lose! Do you want to restart?")) {
+      this.startGame();
+      return;
+    }
+    this.isRunning = false;
   }
 }
 
@@ -470,6 +454,9 @@ class KeyboardInputController {
   isPressed(key: keyof typeof CONTROLS) {
     return this.pressedKeys.has(key);
   }
+  reset() {
+    this.pressedKeys.clear();
+  }
 }
 
 const game = new Game(canvas.width, canvas.height);
@@ -477,6 +464,9 @@ game.init();
 
 let lastTime = 0;
 function animate(currentTime: number) {
+  if (!game.isRunning) {
+    return;
+  }
   const deltaTime = currentTime - lastTime;
   lastTime = currentTime;
   game.update(deltaTime);
@@ -522,5 +512,45 @@ function hitbox({
     right: x + width * 0.5,
     top: y - height * 0.5,
     bottom: y + height * 0.5,
+  };
+}
+
+function calculateSpawnPoint({
+  width,
+  height,
+}: {
+  width: number;
+  height: number;
+}) {
+  const randomValue = getRandom();
+  if (randomValue < 0.25) {
+    // from top
+    return {
+      x: getRandom(25, width - 25),
+      y: 25,
+      direction: Math.floor(getRandom(91, 269)),
+    };
+  }
+  if (randomValue < 0.5) {
+    // from right
+    return {
+      x: width - 25,
+      y: getRandom(20, height - 25),
+      direction: Math.floor(getRandom(181, 359)),
+    };
+  }
+  if (randomValue < 0.75) {
+    // from bottom
+    return {
+      x: getRandom(25, width - 25),
+      y: height - 25,
+      direction: Math.floor(getRandom(-271, 89)),
+    };
+  }
+  // from left
+  return {
+    x: 25,
+    y: getRandom(25, height - 25),
+    direction: Math.floor(getRandom(1, 179)),
   };
 }
