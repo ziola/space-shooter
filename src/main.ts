@@ -46,6 +46,9 @@ class Game {
     this.player?.update(deltaTime);
     this.projectiles.forEach((projectile) => projectile.update(deltaTime));
     this.enemies.forEach((enemy) => enemy.update(deltaTime));
+    this.spawnEnemy(deltaTime);
+  }
+  spawnEnemy(deltaTime: number) {
     if (
       this.timeFromLastEnemySpawned < this.enemySpawnFrequency ||
       this.enemies.length >= this.maxEnemies
@@ -90,6 +93,7 @@ class Game {
       this.addEnemy(enemy);
     }
   }
+
   addProjectile(projectile: Projectile) {
     this.projectiles.push(projectile);
   }
@@ -109,6 +113,11 @@ class Game {
       return;
     }
     this.enemies.splice(enemyIndex, 1);
+    this.timeFromLastEnemySpawned = 0;
+  }
+
+  endGame() {
+    alert("You lose!");
   }
 }
 
@@ -197,6 +206,22 @@ class Player {
         this.timeFromLastProjectile = 0;
       }
     }
+    //collision detection with enemies
+    const hasColided = this.game.enemies.some((enemy) => {
+      return detectColision(this.hitbox(), enemy.hitbox());
+    });
+    if (hasColided) {
+      this.game.endGame();
+    }
+  }
+
+  hitbox() {
+    return hitbox({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    });
   }
 
   render(ctx: CanvasRenderingContext2D) {
@@ -249,6 +274,7 @@ class Enemy {
     this.direction = (direction * Math.PI) / 180;
     this.speed = speed;
   }
+
   update(deltaTime: number) {
     const xDistance = this.speed * Math.sin(this.direction);
     const newX = this.x + xDistance;
@@ -269,6 +295,14 @@ class Enemy {
       this.direction =
         (this.direction >= 0 ? Math.PI : -Math.PI) - this.direction;
     }
+
+    const collidingProjectile = this.game.projectiles.find((projectile) => {
+      return detectColision(this.hitbox(), projectile.hitbox());
+    });
+    if (collidingProjectile) {
+      this.game.removeEnemy(this);
+      this.game.removeProjectile(collidingProjectile);
+    }
   }
 
   render(ctx: CanvasRenderingContext2D) {
@@ -285,6 +319,15 @@ class Enemy {
     ctx.fillStyle = "green";
     ctx.fillRect(-5, -this.height * 0.5, 10, 10);
     ctx.restore();
+  }
+
+  hitbox() {
+    return hitbox({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    });
   }
 }
 class Projectile {
@@ -357,6 +400,15 @@ class Projectile {
       this.height
     );
     ctx.restore();
+  }
+
+  hitbox() {
+    return hitbox({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    });
   }
 }
 
@@ -436,4 +488,39 @@ animate(0);
 
 function getRandom(min = 0, max = 1) {
   return Math.random() * (max - min) + min;
+}
+
+type Hitbox = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+function detectColision(hitbox1: Hitbox, hitbox2: Hitbox) {
+  return (
+    hitbox1.left <= hitbox2.right &&
+    hitbox1.right >= hitbox2.left &&
+    hitbox1.top <= hitbox2.bottom &&
+    hitbox1.bottom >= hitbox2.top
+  );
+}
+
+function hitbox({
+  height,
+  width,
+  x,
+  y,
+}: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): Hitbox {
+  return {
+    left: x - width * 0.5,
+    right: x + width * 0.5,
+    top: y - height * 0.5,
+    bottom: y + height * 0.5,
+  };
 }
