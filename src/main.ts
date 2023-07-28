@@ -11,7 +11,7 @@ if (!context) {
 context.fillStyle = "pink";
 
 class Game {
-  player: Player;
+  player: Player | null;
   projectiles: Projectile[];
   enemies: Enemy[];
   height: number;
@@ -25,7 +25,7 @@ class Game {
   constructor(width: number, height: number) {
     this.height = height;
     this.width = width;
-    this.player = new Player(this);
+    this.player = null;
     this.projectiles = [];
     this.enemies = [];
     this.keyboardInputController = new KeyboardInputController();
@@ -36,12 +36,12 @@ class Game {
   }
   render(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
-    this.player.render(ctx);
+    this.player?.render(ctx);
     this.projectiles.forEach((projectile) => projectile.render(ctx));
     this.enemies.forEach((enemy) => enemy.render(ctx));
   }
   update(deltaTime: number) {
-    this.player.update(deltaTime);
+    this.player?.update(deltaTime);
     this.projectiles.forEach((projectile) => projectile.update(deltaTime));
     this.enemies.forEach((enemy) => enemy.update(deltaTime));
     this.spawnEnemy(deltaTime);
@@ -88,11 +88,15 @@ class Game {
   }
 
   startGame() {
-    this.keyboardInputController.init();
-    this.player.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
+    this.player = new Player(this);
+    this.respawn();
+    this.isRunning = true;
+  }
+
+  respawn() {
+    this.player?.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
     this.projectiles = [];
     this.enemies = [];
-    this.isRunning = true;
   }
 
   endGame() {
@@ -115,7 +119,8 @@ class Player {
   private direction: number;
   private rotationSpeed: number; // in radians
   private timeFromLastProjectile = Infinity; // time from last projectile spawned
-  private projectileFireFrequency = 250; // delay between projectiles
+  private readonly projectileFireFrequency = 250; // delay between projectiles
+  private livesRemaining: number;
 
   constructor(game: Game) {
     this.game = game;
@@ -126,6 +131,7 @@ class Player {
     this.speed = 0;
     this.direction = 0;
     this.rotationSpeed = 0;
+    this.livesRemaining = 3;
   }
 
   init(
@@ -194,7 +200,13 @@ class Player {
     const hasColided = this.game.enemies.some((enemy) => {
       return detectColision(this.hitbox(), enemy.hitbox());
     });
-    if (hasColided) {
+    if (!hasColided) {
+      return;
+    }
+    this.livesRemaining--;
+    if (this.livesRemaining > 0) {
+      this.game.respawn();
+    } else {
       this.game.endGame();
     }
   }
@@ -209,6 +221,11 @@ class Player {
   }
 
   render(ctx: CanvasRenderingContext2D) {
+    this.renderPlayer(ctx);
+    this.renderLives(ctx);
+  }
+
+  private renderPlayer(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.direction);
@@ -221,6 +238,28 @@ class Player {
     ctx.fillStyle = "blue";
     ctx.fillRect(-5, -this.height * 0.5 + 5, 10, 10);
     ctx.restore();
+  }
+
+  private renderLives(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    for (let i = 0; i < this.livesRemaining; i++) {
+      const horizontalOffset = 10 + (3 + 12) * i;
+      ctx.fillStyle = "red";
+      ctx.fillRect(
+        this.game.width - horizontalOffset - 12,
+        this.game.height - 10 - 12,
+        12,
+        12
+      );
+      ctx.fillStyle = "white";
+      ctx.fillRect(
+        this.game.width - horizontalOffset - 11,
+        this.game.height - 10 - 11,
+        10,
+        10
+      );
+      ctx.restore();
+    }
   }
 }
 
