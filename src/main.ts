@@ -11,6 +11,8 @@ if (!context) {
 context.fillStyle = "pink";
 
 class Game {
+  private loop: GameLoop | null;
+
   player: Player | null;
   projectiles: Projectile[];
   enemies: Enemy[];
@@ -25,6 +27,7 @@ class Game {
   private maxEnemies = 5; //maximal number of enemies present at one time
 
   constructor(width: number, height: number) {
+    this.loop = null;
     this.height = height;
     this.width = width;
     this.player = null;
@@ -33,7 +36,8 @@ class Game {
     this.livesPanel = null;
     this.keyboardInputController = new KeyboardInputController();
   }
-  init() {
+  init(gameLoop: GameLoop) {
+    this.loop = gameLoop;
     this.keyboardInputController.init();
     this.startGame();
   }
@@ -50,6 +54,17 @@ class Game {
     this.enemies.forEach((enemy) => enemy.update(deltaTime));
     this.spawnEnemy(deltaTime);
   }
+  onLoop(deltaTime: number) {
+    if (game.isRunning) {
+      game.update(deltaTime);
+      game.render(context!);
+    } else if (confirm("You lose! Do you want to restart?")) {
+      game.startGame();
+    } else {
+      this.loop?.end();
+    }
+  }
+
   spawnEnemy(deltaTime: number) {
     if (
       this.timeFromLastEnemySpawned < this.enemySpawnFrequency ||
@@ -68,7 +83,6 @@ class Game {
     this.addEnemy(enemy);
     this.timeFromLastEnemySpawned = 0;
   }
-
   addProjectile(projectile: Projectile) {
     this.projectiles.push(projectile);
   }
@@ -97,6 +111,7 @@ class Game {
     this.livesPanel = new LivesPanel(this);
     this.livesPanel.init(this.player, this.width - 10, this.height - 10);
     this.respawn();
+    this.timeFromLastEnemySpawned = Infinity;
     this.isRunning = true;
   }
 
@@ -522,26 +537,42 @@ class KeyboardInputController {
   }
 }
 
-const game = new Game(canvas.width, canvas.height);
-game.init();
+class GameLoop {
+  private lastTime = 0;
+  private onLoop: FrameRequestCallback = () => {};
+  private animationFrame: number | null;
 
-let lastTime = 0;
-function animate(currentTime: number) {
-  if (game.isRunning) {
-    const deltaTime = currentTime - lastTime;
-    lastTime = currentTime;
-    game.update(deltaTime);
-    game.render(context!);
-  } else if (confirm("You lose! Do you want to restart?")) {
-    game.startGame();
-  } else {
-    return;
+  constructor() {
+    this.animationFrame = null;
   }
-  requestAnimationFrame(animate);
+
+  init(onLoop: (deltaTime: number) => void) {
+    this.onLoop = (time: number) => {
+      this.animationFrame = requestAnimationFrame(this.onLoop);
+      const deltaTime = time - this.lastTime;
+      this.lastTime = time;
+      onLoop(deltaTime);
+    };
+  }
+
+  start() {
+    this.lastTime = 0;
+    this.animationFrame = requestAnimationFrame(this.onLoop);
+  }
+
+  end() {
+    this.animationFrame && cancelAnimationFrame(this.animationFrame);
+  }
 }
 
-animate(0);
+// Entry point
+const gameLoop = new GameLoop();
+const game = new Game(canvas.width, canvas.height);
+game.init(gameLoop);
+gameLoop.init(game.onLoop.bind(game));
+gameLoop.start();
 
+// UTILS
 function getRandom(min = 0, max = 1) {
   return Math.random() * (max - min) + min;
 }
