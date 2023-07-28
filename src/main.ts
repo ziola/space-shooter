@@ -14,6 +14,8 @@ class Game {
   player: Player | null;
   projectiles: Projectile[];
   enemies: Enemy[];
+  livesPanel: LivesPanel | null;
+
   height: number;
   width: number;
   keyboardInputController: KeyboardInputController;
@@ -28,6 +30,7 @@ class Game {
     this.player = null;
     this.projectiles = [];
     this.enemies = [];
+    this.livesPanel = null;
     this.keyboardInputController = new KeyboardInputController();
   }
   init() {
@@ -39,6 +42,7 @@ class Game {
     this.player?.render(ctx);
     this.projectiles.forEach((projectile) => projectile.render(ctx));
     this.enemies.forEach((enemy) => enemy.render(ctx));
+    this.livesPanel?.render(ctx);
   }
   update(deltaTime: number) {
     this.player?.update(deltaTime);
@@ -88,7 +92,10 @@ class Game {
   }
 
   startGame() {
+    this.keyboardInputController.reset();
     this.player = new Player(this);
+    this.livesPanel = new LivesPanel(this);
+    this.livesPanel.init(this.player, this.width - 10, this.height - 10);
     this.respawn();
     this.isRunning = true;
   }
@@ -100,11 +107,6 @@ class Game {
   }
 
   endGame() {
-    this.keyboardInputController.reset();
-    if (confirm("You lose! Do you want to restart?")) {
-      this.startGame();
-      return;
-    }
     this.isRunning = false;
   }
 }
@@ -120,7 +122,7 @@ class Player {
   private rotationSpeed: number; // in radians
   private timeFromLastProjectile = Infinity; // time from last projectile spawned
   private readonly projectileFireFrequency = 250; // delay between projectiles
-  private livesRemaining: number;
+  livesRemaining: number;
 
   constructor(game: Game) {
     this.game = game;
@@ -222,7 +224,6 @@ class Player {
 
   render(ctx: CanvasRenderingContext2D) {
     this.renderPlayer(ctx);
-    this.renderLives(ctx);
   }
 
   private renderPlayer(ctx: CanvasRenderingContext2D) {
@@ -239,24 +240,47 @@ class Player {
     ctx.fillRect(-5, -this.height * 0.5 + 5, 10, 10);
     ctx.restore();
   }
+}
 
-  private renderLives(ctx: CanvasRenderingContext2D) {
+class LivesPanel {
+  private game: Game;
+  private player: Player | null;
+  private x: number;
+  private y: number;
+  private width: number = 12;
+  private height: number = 12;
+
+  constructor(game: Game) {
+    this.game = game;
+    this.player = null;
+    this.x = 0;
+    this.y = 0;
+  }
+
+  init(player: Player, x: number, y: number) {
+    this.player = player;
+    this.x = x;
+    this.y = y;
+  }
+
+  render(ctx: CanvasRenderingContext2D) {
+    const border = 1;
+    const margin = 3;
     ctx.save();
-    for (let i = 0; i < this.livesRemaining; i++) {
-      const horizontalOffset = 10 + (3 + 12) * i;
+    for (let i = 0; i < (this.player?.livesRemaining ?? 0); i++) {
       ctx.fillStyle = "red";
       ctx.fillRect(
-        this.game.width - horizontalOffset - 12,
-        this.game.height - 10 - 12,
-        12,
-        12
+        this.x - this.width * (i + 1) - margin * i,
+        this.y - this.height,
+        this.width,
+        this.height
       );
       ctx.fillStyle = "white";
       ctx.fillRect(
-        this.game.width - horizontalOffset - 11,
-        this.game.height - 10 - 11,
-        10,
-        10
+        this.x - this.width * (i + 1) - margin * i + border,
+        this.y - this.height + border,
+        this.width - border * 2,
+        this.height - border * 2
       );
       ctx.restore();
     }
@@ -503,13 +527,16 @@ game.init();
 
 let lastTime = 0;
 function animate(currentTime: number) {
-  if (!game.isRunning) {
+  if (game.isRunning) {
+    const deltaTime = currentTime - lastTime;
+    lastTime = currentTime;
+    game.update(deltaTime);
+    game.render(context!);
+  } else if (confirm("You lose! Do you want to restart?")) {
+    game.startGame();
+  } else {
     return;
   }
-  const deltaTime = currentTime - lastTime;
-  lastTime = currentTime;
-  game.update(deltaTime);
-  game.render(context!);
   requestAnimationFrame(animate);
 }
 
