@@ -17,6 +17,7 @@ class Game {
   projectiles: Projectile[];
   enemies: Enemy[];
   livesPanel: LivesPanel | null;
+  scorePanel: ScorePanel | null;
 
   height: number;
   width: number;
@@ -34,6 +35,7 @@ class Game {
     this.projectiles = [];
     this.enemies = [];
     this.livesPanel = null;
+    this.scorePanel = null;
     this.keyboardInputController = new KeyboardInputController();
   }
   init(gameLoop: GameLoop) {
@@ -47,6 +49,7 @@ class Game {
     this.projectiles.forEach((projectile) => projectile.render(ctx));
     this.enemies.forEach((enemy) => enemy.render(ctx));
     this.livesPanel?.render(ctx);
+    this.scorePanel?.render(ctx);
   }
   update(deltaTime: number) {
     this.player?.update(deltaTime);
@@ -105,11 +108,19 @@ class Game {
     this.timeFromLastEnemySpawned = 0;
   }
 
+  enemyKilled(enemy: Enemy, projectile: Projectile) {
+    this.removeEnemy(enemy);
+    this.removeProjectile(projectile);
+    this.player?.increaseScore(1);
+  }
+
   startGame() {
     this.keyboardInputController.reset();
     this.player = new Player(this);
     this.livesPanel = new LivesPanel(this);
     this.livesPanel.init(this.player, this.width - 10, this.height - 10);
+    this.scorePanel = new ScorePanel(this);
+    this.scorePanel.init(this.player, 10, 10);
     this.respawn();
     this.timeFromLastEnemySpawned = Infinity;
     this.isRunning = true;
@@ -138,6 +149,7 @@ class Player {
   private timeFromLastProjectile = Infinity; // time from last projectile spawned
   private readonly projectileFireFrequency = 250; // delay between projectiles
   livesRemaining: number;
+  private score = 0;
 
   constructor(game: Game) {
     this.game = game;
@@ -165,6 +177,11 @@ class Player {
     this.height = height;
     this.speed = speed;
     this.rotationSpeed = (rotationSpeed * Math.PI) / 180;
+    this.score = 0;
+  }
+
+  get currentScore() {
+    return this.score;
   }
 
   update(deltaTime: number) {
@@ -241,6 +258,10 @@ class Player {
     this.renderPlayer(ctx);
   }
 
+  increaseScore(points: number) {
+    this.score += points;
+  }
+
   private renderPlayer(ctx: CanvasRenderingContext2D) {
     ctx.save();
     ctx.translate(this.x, this.y);
@@ -253,6 +274,36 @@ class Player {
     );
     ctx.fillStyle = "blue";
     ctx.fillRect(-5, -this.height * 0.5 + 5, 10, 10);
+    ctx.restore();
+  }
+}
+
+class ScorePanel {
+  private game: Game;
+  private player: Player | null;
+  private x: number;
+  private y: number;
+  private height: number = 16;
+
+  constructor(game: Game) {
+    this.game = game;
+    this.player = null;
+    this.x = 0;
+    this.y = 0;
+  }
+
+  init(player: Player, x: number, y: number) {
+    this.player = player;
+    this.x = x;
+    this.y = y;
+  }
+
+  render(ctx: CanvasRenderingContext2D) {
+    if (!this.player) {
+      return;
+    }
+    ctx.save();
+    ctx.fillText(this.player.currentScore.toString(), this.x, this.y);
     ctx.restore();
   }
 }
@@ -362,8 +413,7 @@ class Enemy {
       return detectColision(this.hitbox(), projectile.hitbox());
     });
     if (collidingProjectile) {
-      this.game.removeEnemy(this);
-      this.game.removeProjectile(collidingProjectile);
+      this.game.enemyKilled(this, collidingProjectile);
     }
   }
 

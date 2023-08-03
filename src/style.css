@@ -19,4 +19,6 @@ body {
   width: 800px;
   background: url("images/background.jpg");
   background-size: cover;
+  transform: scale(1.5);
+  image-rendering: pixelated;
 }
