@@ -8,6 +8,7 @@ if (!context) {
   alert("Canvas is missing!");
   throw new Error("Canvas is missing!");
 }
+context.imageSmoothingEnabled = false;
 context.fillStyle = "pink";
 
 class Game {
@@ -16,16 +17,19 @@ class Game {
   player: Player | null;
   projectiles: Projectile[];
   enemies: Enemy[];
+  explosions: Explosion[];
   livesPanel: LivesPanel | null;
   scorePanel: ScorePanel | null;
 
   height: number;
   width: number;
   keyboardInputController: KeyboardInputController;
+  assetManager: AssetManager;
   isRunning = false;
   private timeFromLastEnemySpawned = 0; // time from last enemy spawned
   private enemySpawnFrequency = 1000; // delay between enemies
   private maxEnemies = 5; //maximal number of enemies present at one time
+  private isPlayerKilled = false;
 
   constructor(width: number, height: number) {
     this.loop = null;
@@ -34,35 +38,47 @@ class Game {
     this.player = null;
     this.projectiles = [];
     this.enemies = [];
+    this.explosions = [];
     this.livesPanel = null;
     this.scorePanel = null;
     this.keyboardInputController = new KeyboardInputController();
+    this.assetManager = new AssetManager();
   }
   init(gameLoop: GameLoop) {
     this.loop = gameLoop;
     this.keyboardInputController.init();
+    this.assetManager.init();
     this.startGame();
   }
   render(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
-    this.player?.render(ctx);
-    this.projectiles.forEach((projectile) => projectile.render(ctx));
-    this.enemies.forEach((enemy) => enemy.render(ctx));
+    if (!this.isPlayerKilled) {
+      this.player?.render(ctx);
+      this.projectiles.forEach((projectile) => projectile.render(ctx));
+      this.enemies.forEach((enemy) => enemy.render(ctx));
+    }
+    this.explosions.forEach((explosion) => explosion.render(ctx));
     this.livesPanel?.render(ctx);
     this.scorePanel?.render(ctx);
   }
   update(deltaTime: number) {
-    this.player?.update(deltaTime);
-    this.projectiles.forEach((projectile) => projectile.update(deltaTime));
-    this.enemies.forEach((enemy) => enemy.update(deltaTime));
-    this.spawnEnemy(deltaTime);
+    if (!this.isPlayerKilled) {
+      this.player?.update(deltaTime);
+      this.projectiles.forEach((projectile) => projectile.update(deltaTime));
+      this.enemies.forEach((enemy) => enemy.update(deltaTime));
+      this.spawnEnemy(deltaTime);
+    }
+    if (this.isPlayerKilled && this.explosions.length === 0) {
+      this.respawn();
+    }
+    this.explosions.forEach((explosion) => explosion.update(deltaTime));
   }
   onLoop(deltaTime: number) {
-    if (game.isRunning) {
-      game.update(deltaTime);
-      game.render(context!);
+    if (this.isRunning || this.explosions.length !== 0) {
+      this.update(deltaTime);
+      this.render(context!);
     } else if (confirm("You lose! Do you want to restart?")) {
-      game.startGame();
+      this.startGame();
     } else {
       this.loop?.end();
     }
@@ -82,7 +98,15 @@ class Game {
       height: this.height,
     });
 
-    enemy.init(x, y, 25, 25, direction, Math.floor(getRandom(1, 5)));
+    enemy.init(
+      x,
+      y,
+      25,
+      25,
+      direction,
+      Math.floor(getRandom(1, 5)),
+      Math.floor(getRandom(0, 35))
+    );
     this.addEnemy(enemy);
     this.timeFromLastEnemySpawned = 0;
   }
@@ -107,6 +131,16 @@ class Game {
     this.enemies.splice(enemyIndex, 1);
     this.timeFromLastEnemySpawned = 0;
   }
+  addExplosion(explosion: Explosion) {
+    this.explosions.push(explosion);
+  }
+  removeExplosion(explosion: Explosion) {
+    const explosionIndex = this.explosions.indexOf(explosion);
+    if (explosionIndex === -1) {
+      return;
+    }
+    this.explosions.splice(explosionIndex, 1);
+  }
 
   enemyKilled(enemy: Enemy, projectile: Projectile) {
     this.removeEnemy(enemy);
@@ -127,12 +161,20 @@ class Game {
   }
 
   respawn() {
-    this.player?.init(this.width * 0.5, this.height * 0.5, 50, 50, 5, 6);
+    this.player?.init(this.width * 0.5, this.height * 0.5, 32, 32, 5, 6, 0);
     this.projectiles = [];
     this.enemies = [];
+    this.explosions = [];
+    this.isPlayerKilled = false;
+  }
+
+  killPlayer() {
+    this.enemies.forEach((enemy) => enemy.explode());
+    this.isPlayerKilled = true;
   }
 
   endGame() {
+    this.killPlayer();
     this.isRunning = false;
   }
 }
@@ -150,6 +192,8 @@ class Player {
   private readonly projectileFireFrequency = 250; // delay between projectiles
   livesRemaining: number;
   private score = 0;
+  private img: HTMLImageElement | undefined;
+  private type: number;
 
   constructor(game: Game) {
     this.game = game;
@@ -161,6 +205,8 @@ class Player {
     this.direction = 0;
     this.rotationSpeed = 0;
     this.livesRemaining = 3;
+    this.img = this.game.assetManager.getImage("player_ships");
+    this.type = 0;
   }
 
   init(
@@ -169,7 +215,8 @@ class Player {
     width: number,
     height: number,
     speed: number,
-    rotationSpeed: number
+    rotationSpeed: number,
+    type: number
   ) {
     this.x = x;
     this.y = y;
@@ -177,7 +224,7 @@ class Player {
     this.height = height;
     this.speed = speed;
     this.rotationSpeed = (rotationSpeed * Math.PI) / 180;
-    this.score = 0;
+    this.type = type;
   }
 
   get currentScore() {
@@ -225,21 +272,24 @@ class Player {
         this.timeFromLastProjectile += deltaTime;
       } else {
         const projectile = new Projectile(this.game);
-        projectile.init(this.x, this.y, 5, 5, this.direction, 10);
+        projectile.init(this.x, this.y, 6, 24, this.direction, 10);
         this.game.addProjectile(projectile);
         this.timeFromLastProjectile = 0;
       }
     }
     //collision detection with enemies
-    const hasColided = this.game.enemies.some((enemy) => {
+    const isColiding = this.game.enemies.some((enemy) => {
       return detectColision(this.hitbox(), enemy.hitbox());
     });
-    if (!hasColided) {
+    if (!isColiding) {
       return;
     }
     this.livesRemaining--;
+    const explosion = new Explosion(this.game);
+    explosion.init(this.x, this.y, this.width, this.height);
+    this.game.addExplosion(explosion);
     if (this.livesRemaining > 0) {
-      this.game.respawn();
+      this.game.killPlayer();
     } else {
       this.game.endGame();
     }
@@ -263,18 +313,31 @@ class Player {
   }
 
   private renderPlayer(ctx: CanvasRenderingContext2D) {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.direction);
-    ctx.fillRect(
-      -this.width * 0.5,
-      -this.height * 0.5,
-      this.width,
-      this.height
-    );
-    ctx.fillStyle = "blue";
-    ctx.fillRect(-5, -this.height * 0.5 + 5, 10, 10);
-    ctx.restore();
+    if (this.img) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.direction);
+      ctx.drawImage(
+        this.img,
+        0,
+        this.type * 8,
+        8,
+        8,
+        -this.width * 0.5,
+        -this.height * 0.5,
+        this.width,
+        this.height
+      );
+      // hitbox
+      // ctx.fillStyle = "blue";
+      // ctx.strokeRect(
+      //   -this.width * 0.5,
+      //   -this.height * 0.5,
+      //   this.width,
+      //   this.height
+      // );
+      ctx.restore();
+    }
   }
 }
 
@@ -313,14 +376,16 @@ class LivesPanel {
   private player: Player | null;
   private x: number;
   private y: number;
-  private width: number = 12;
-  private height: number = 12;
+  private width: number = 16;
+  private height: number = 16;
+  private img: HTMLImageElement | undefined;
 
   constructor(game: Game) {
     this.game = game;
     this.player = null;
     this.x = 0;
     this.y = 0;
+    this.img = this.game.assetManager.getImage("icons");
   }
 
   init(player: Player, x: number, y: number) {
@@ -330,25 +395,22 @@ class LivesPanel {
   }
 
   render(ctx: CanvasRenderingContext2D) {
-    const border = 1;
-    const margin = 3;
-    ctx.save();
-    for (let i = 0; i < (this.player?.livesRemaining ?? 0); i++) {
-      ctx.fillStyle = "red";
-      ctx.fillRect(
-        this.x - this.width * (i + 1) - margin * i,
-        this.y - this.height,
-        this.width,
-        this.height
-      );
-      ctx.fillStyle = "white";
-      ctx.fillRect(
-        this.x - this.width * (i + 1) - margin * i + border,
-        this.y - this.height + border,
-        this.width - border * 2,
-        this.height - border * 2
-      );
-      ctx.restore();
+    if (this.img) {
+      const margin = 3;
+      ctx.save();
+      for (let i = 0; i < (this.player?.livesRemaining ?? 0); i++) {
+        ctx.drawImage(
+          this.img,
+          0,
+          0,
+          8,
+          8,
+          this.x - this.width * (i + 1) - margin * i,
+          this.y - this.height,
+          this.width,
+          this.height
+        );
+      }
     }
   }
 }
@@ -361,6 +423,8 @@ class Enemy {
   private height: number;
   private speed: number;
   private direction: number;
+  private img: HTMLImageElement | undefined;
+  private type: number;
 
   constructor(game: Game) {
     this.game = game;
@@ -370,6 +434,8 @@ class Enemy {
     this.width = 0;
     this.height = 0;
     this.speed = 0;
+    this.img = this.game.assetManager.getImage("enemy_ships");
+    this.type = 0;
   }
 
   init(
@@ -378,7 +444,8 @@ class Enemy {
     width: number,
     height: number,
     direction: number,
-    speed: number
+    speed: number,
+    type: number
   ) {
     this.x = x;
     this.y = y;
@@ -386,6 +453,7 @@ class Enemy {
     this.height = height;
     this.direction = (direction * Math.PI) / 180;
     this.speed = speed;
+    this.type = type;
   }
 
   update(deltaTime: number) {
@@ -413,24 +481,126 @@ class Enemy {
       return detectColision(this.hitbox(), projectile.hitbox());
     });
     if (collidingProjectile) {
+      const explosion = new Explosion(this.game);
+      explosion.init(this.x, this.y, this.width, this.height);
+      this.game.addExplosion(explosion);
       this.game.enemyKilled(this, collidingProjectile);
     }
   }
 
   render(ctx: CanvasRenderingContext2D) {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.direction);
-    ctx.fillStyle = "red";
-    ctx.fillRect(
-      -this.width * 0.5,
-      -this.height * 0.5,
-      this.width,
-      this.height
-    );
-    ctx.fillStyle = "green";
-    ctx.fillRect(-5, -this.height * 0.5, 10, 10);
-    ctx.restore();
+    if (this.img) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.direction);
+      const sy = this.type % 6;
+      const sx = Math.floor(this.type / 6);
+      ctx.drawImage(
+        this.img,
+        sx * 8,
+        sy * 8,
+        8,
+        8,
+        -this.width * 0.5,
+        -this.height * 0.5,
+        this.width,
+        this.height
+      );
+      //debug
+      // ctx.fillStyle = "red";
+      // ctx.fillRect(
+      //   -this.width * 0.5,
+      //   -this.height * 0.5,
+      //   this.width,
+      //   this.height
+      // );
+      ctx.restore();
+    }
+  }
+
+  hitbox() {
+    return hitbox({
+      x: this.x,
+      y: this.y,
+      width: this.width,
+      height: this.height,
+    });
+  }
+
+  explode() {
+    const explosion = new Explosion(this.game);
+    explosion.init(this.x, this.y, this.width, this.height);
+    this.game.addExplosion(explosion);
+  }
+}
+
+class Explosion {
+  private game: Game;
+  private x: number;
+  private y: number;
+  private width: number;
+  private height: number;
+  private frame: number;
+  private currentFrame = 0;
+  private readonly maxFrame = 3;
+  private img: HTMLImageElement | undefined;
+
+  constructor(game: Game) {
+    this.game = game;
+    this.frame = 0;
+    this.maxFrame = 3;
+    this.x = -Infinity;
+    this.y = -Infinity;
+    this.width = 0;
+    this.height = 0;
+    this.img = this.game.assetManager.getImage("icons");
+  }
+
+  init(x: number, y: number, width: number, height: number) {
+    this.x = x;
+    this.y = y;
+    this.width = width;
+    this.height = height;
+    this.frame = 0;
+    this.currentFrame = 0;
+  }
+
+  update(deltaTime: number) {
+    this.frame++;
+    if (this.frame > 12) {
+      this.currentFrame++;
+      this.frame = 0;
+    }
+    if (this.currentFrame > this.maxFrame) {
+      this.game.removeExplosion(this);
+    }
+  }
+
+  render(ctx: CanvasRenderingContext2D) {
+    if (this.img) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.drawImage(
+        this.img,
+        8 * this.currentFrame,
+        8,
+        8,
+        8,
+        -this.width * 0.5,
+        -this.height * 0.5,
+        this.width,
+        this.height
+      );
+      // debug;
+      // ctx.fillStyle = "yellow";
+      // ctx.fillRect(
+      //   -this.width * 0.5,
+      //   -this.height * 0.5,
+      //   this.width,
+      //   this.height
+      // );
+      ctx.restore();
+    }
   }
 
   hitbox() {
@@ -442,6 +612,7 @@ class Enemy {
     });
   }
 }
+
 class Projectile {
   private game: Game;
   private x: number;
@@ -450,6 +621,7 @@ class Projectile {
   private height: number;
   private speed: number;
   private direction: number;
+  private img: HTMLImageElement | undefined;
 
   constructor(game: Game) {
     this.game = game;
@@ -459,6 +631,7 @@ class Projectile {
     this.width = 0;
     this.height = 0;
     this.speed = 0;
+    this.img = this.game.assetManager.getImage("icons");
   }
 
   init(
@@ -501,17 +674,31 @@ class Projectile {
   }
 
   render(ctx: CanvasRenderingContext2D) {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.direction);
-    ctx.fillStyle = "yellow";
-    ctx.fillRect(
-      -this.width * 0.5,
-      -this.height * 0.5,
-      this.width,
-      this.height
-    );
-    ctx.restore();
+    if (this.img) {
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.direction);
+      ctx.drawImage(
+        this.img,
+        0,
+        16,
+        3,
+        3,
+        -this.width * 0.5,
+        -this.height * 0.5,
+        this.width,
+        this.height
+      );
+      // debug;
+      // ctx.fillStyle = "yellow";
+      // ctx.fillRect(
+      //   -this.width * 0.5,
+      //   -this.height * 0.5,
+      //   this.width,
+      //   this.height
+      // );
+      ctx.restore();
+    }
   }
 
   hitbox() {
@@ -584,6 +771,21 @@ class KeyboardInputController {
   }
   reset() {
     this.pressedKeys.clear();
+  }
+}
+
+class AssetManager {
+  private images = new Map<string, HTMLImageElement>();
+
+  init() {
+    for (const image of document.images) {
+      const name = image.src.split("/").slice(-1)[0].split(".")[0];
+      this.images.set(name, image);
+    }
+  }
+
+  getImage(name: string) {
+    return this.images.get(name);
   }
 }
 
