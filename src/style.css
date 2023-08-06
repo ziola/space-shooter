@@ -13,12 +13,16 @@ body {
   align-items: center;
 }
 
+img {
+  display: none;
+}
+
 #canvas {
   border: 1px solid #393939;
-  height: 600px;
-  width: 800px;
+  height: 480px;
+  width: 640px;
   background: url("images/background.jpg");
   background-size: cover;
-  transform: scale(1.5);
+  /* transform: scale(1.5); */
   image-rendering: pixelated;
 }

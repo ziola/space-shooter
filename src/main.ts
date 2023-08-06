@@ -1,16 +1,5 @@
 import "./style.css";
 
-const canvas = document.querySelector("#canvas") as HTMLCanvasElement;
-canvas.width = 800;
-canvas.height = 600;
-const context = canvas?.getContext("2d");
-if (!context) {
-  alert("Canvas is missing!");
-  throw new Error("Canvas is missing!");
-}
-context.imageSmoothingEnabled = false;
-context.fillStyle = "pink";
-
 class Game {
   private loop: GameLoop | null;
 
@@ -154,7 +143,7 @@ class Game {
     this.livesPanel = new LivesPanel(this);
     this.livesPanel.init(this.player, this.width - 10, this.height - 10);
     this.scorePanel = new ScorePanel(this);
-    this.scorePanel.init(this.player, 10, 10);
+    this.scorePanel.init(this.player, 8, 24);
     this.respawn();
     this.timeFromLastEnemySpawned = Infinity;
     this.isRunning = true;
@@ -267,7 +256,7 @@ class Player {
       this.height * 0.5,
       Math.min(this.y + yMove, this.game.height - this.height * 0.5)
     );
-    if (game.keyboardInputController.isPressed("FIRE")) {
+    if (this.game.keyboardInputController.isPressed("FIRE")) {
       if (this.timeFromLastProjectile < this.projectileFireFrequency) {
         this.timeFromLastProjectile += deltaTime;
       } else {
@@ -366,6 +355,8 @@ class ScorePanel {
       return;
     }
     ctx.save();
+    ctx.fillStyle = "#00cb00";
+    ctx.font = "24px SyntheticText";
     ctx.fillText(this.player.currentScore.toString(), this.x, this.y);
     ctx.restore();
   }
@@ -817,13 +808,6 @@ class GameLoop {
   }
 }
 
-// Entry point
-const gameLoop = new GameLoop();
-const game = new Game(canvas.width, canvas.height);
-game.init(gameLoop);
-gameLoop.init(game.onLoop.bind(game));
-gameLoop.start();
-
 // UTILS
 function getRandom(min = 0, max = 1) {
   return Math.random() * (max - min) + min;
@@ -903,3 +887,34 @@ function calculateSpawnPoint({
     direction: Math.floor(getRandom(1, 179)),
   };
 }
+
+async function loadAssets() {
+  const syntheticText = new FontFace(
+    "SyntheticText",
+    "url(./SyntheticText.ttf)"
+  );
+
+  const font = await syntheticText.load();
+  document.fonts.add(font);
+  return Promise.resolve();
+}
+
+//TODO refactor into proper asset manager
+const canvas = document.querySelector("#canvas") as HTMLCanvasElement;
+canvas.width = 640;
+canvas.height = 480;
+const context = canvas?.getContext("2d");
+if (!context) {
+  alert("Canvas is missing!");
+  throw new Error("Canvas is missing!");
+}
+context.imageSmoothingEnabled = false;
+
+loadAssets().then(() => {
+  // Entry point
+  const gameLoop = new GameLoop();
+  const game = new Game(canvas.width, canvas.height);
+  game.init(gameLoop);
+  gameLoop.init(game.onLoop.bind(game));
+  gameLoop.start();
+});
