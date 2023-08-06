@@ -9,16 +9,17 @@ class Game {
   explosions: Explosion[];
   livesPanel: LivesPanel | null;
   scorePanel: ScorePanel | null;
+  menuPanel: MenuPanel | null;
 
   height: number;
   width: number;
   keyboardInputController: KeyboardInputController;
   assetManager: AssetManager;
-  isRunning = false;
   private timeFromLastEnemySpawned = 0; // time from last enemy spawned
   private enemySpawnFrequency = 1000; // delay between enemies
   private maxEnemies = 5; //maximal number of enemies present at one time
   private isPlayerKilled = false;
+  private isPaused = true;
 
   constructor(width: number, height: number) {
     this.loop = null;
@@ -28,16 +29,25 @@ class Game {
     this.projectiles = [];
     this.enemies = [];
     this.explosions = [];
-    this.livesPanel = null;
-    this.scorePanel = null;
     this.keyboardInputController = new KeyboardInputController();
     this.assetManager = new AssetManager();
+    this.livesPanel = new LivesPanel(this);
+    this.scorePanel = new ScorePanel(this);
+    this.menuPanel = new MenuPanel(this);
+
+    this.endGame = this.endGame.bind(this);
+    this.resumeGame = this.resumeGame.bind(this);
+    this.startGame = this.startGame.bind(this);
   }
   init(gameLoop: GameLoop) {
     this.loop = gameLoop;
     this.keyboardInputController.init();
     this.assetManager.init();
-    this.startGame();
+    this.menuPanel?.init([
+      { label: "START", onActivate: this.startGame },
+      { label: "CREDITS", onActivate: () => alert("TODO: CREDITS") },
+    ]);
+    this.isPaused = true;
   }
   render(ctx: CanvasRenderingContext2D) {
     ctx.clearRect(0, 0, this.width, this.height);
@@ -49,8 +59,19 @@ class Game {
     this.explosions.forEach((explosion) => explosion.render(ctx));
     this.livesPanel?.render(ctx);
     this.scorePanel?.render(ctx);
+    if (this.isPaused) {
+      this.menuPanel?.render(ctx);
+    }
   }
   update(deltaTime: number) {
+    if (this.keyboardInputController.isPressed("PAUSE")) {
+      this.pauseGame();
+      return;
+    }
+    if (this.isPaused) {
+      this.menuPanel?.update(deltaTime);
+      return;
+    }
     if (!this.isPlayerKilled) {
       this.player?.update(deltaTime);
       this.projectiles.forEach((projectile) => projectile.update(deltaTime));
@@ -63,14 +84,8 @@ class Game {
     this.explosions.forEach((explosion) => explosion.update(deltaTime));
   }
   onLoop(deltaTime: number) {
-    if (this.isRunning || this.explosions.length !== 0) {
-      this.update(deltaTime);
-      this.render(context!);
-    } else if (confirm("You lose! Do you want to restart?")) {
-      this.startGame();
-    } else {
-      this.loop?.end();
-    }
+    this.update(deltaTime);
+    this.render(context!);
   }
 
   spawnEnemy(deltaTime: number) {
@@ -140,13 +155,13 @@ class Game {
   startGame() {
     this.keyboardInputController.reset();
     this.player = new Player(this);
-    this.livesPanel = new LivesPanel(this);
-    this.livesPanel.init(this.player, this.width - 10, this.height - 10);
-    this.scorePanel = new ScorePanel(this);
-    this.scorePanel.init(this.player, 8, 24);
+    // this.livesPanel = new LivesPanel(this);
+    this.livesPanel?.init(this.player, this.width - 10, this.height - 10);
+    // this.scorePanel = new ScorePanel(this);
+    this.scorePanel?.init(this.player, 8, 24);
     this.respawn();
     this.timeFromLastEnemySpawned = Infinity;
-    this.isRunning = true;
+    this.isPaused = false;
   }
 
   respawn() {
@@ -164,7 +179,104 @@ class Game {
 
   endGame() {
     this.killPlayer();
-    this.isRunning = false;
+    this.isPaused = true;
+    this.menuPanel?.init([
+      { label: "NEW GAME", onActivate: this.startGame },
+      { label: "CREDITS", onActivate: this.endGame },
+    ]);
+  }
+
+  resumeGame() {
+    this.isPaused = false;
+  }
+
+  pauseGame() {
+    this.isPaused = true;
+    this.menuPanel?.init([
+      { label: "RESUME", onActivate: this.resumeGame },
+      { label: "RESTART", onActivate: this.startGame },
+    ]);
+  }
+}
+
+class MenuPanel {
+  private game: Game;
+  private items: { label: string; onActivate: () => void }[] = [];
+  private activeItem = 0;
+  private readonly inputDelay = 250;
+  private lastInput = 0;
+
+  constructor(game: Game) {
+    this.game = game;
+  }
+
+  //TODO add setting posision
+  init(items: typeof this.items) {
+    this.items = items;
+    this.activeItem = 0;
+    this.lastInput = 0;
+  }
+
+  update(deltaTime: number) {
+    if (this.lastInput < this.inputDelay) {
+      this.lastInput += deltaTime;
+      return;
+    }
+    if (this.game.keyboardInputController.isPressed("ACTIVATE")) {
+      this.items[this.activeItem].onActivate();
+      this.lastInput = 0;
+      return;
+    } else if (this.game.keyboardInputController.isPressed("UP")) {
+      const newActiveItem = this.activeItem - 1;
+      if (newActiveItem < 0) {
+        this.activeItem = this.items.length - 1;
+      } else {
+        this.activeItem = newActiveItem;
+      }
+      this.lastInput = 0;
+    } else {
+      if (this.game.keyboardInputController.isPressed("DOWN")) {
+        const newActiveItem = this.activeItem + 1;
+        if (newActiveItem >= this.items.length) {
+          this.activeItem = 0;
+        } else {
+          this.activeItem = newActiveItem;
+        }
+        this.lastInput = 0;
+      }
+    }
+  }
+
+  render(ctx: CanvasRenderingContext2D) {
+    ctx.save();
+    // overlay
+    ctx.fillStyle = "hsl(0 0% 40% / 50%)";
+    ctx.fillRect(0, 0, this.game.width, this.game.height);
+
+    const itemHeight = 32;
+
+    ctx.fillStyle = "hsl(120, 100%, 40%)";
+    ctx.font = `${itemHeight}px SyntheticText`;
+
+    this.items.forEach(({ label }, index) => {
+      const measurement = ctx.measureText(label);
+      const gap = 16;
+      const x = this.game.width * 0.5 - measurement.width * 0.5;
+      const y =
+        this.game.height * 0.5 - itemHeight * 0.5 + (itemHeight + gap) * index;
+      ctx.fillText(label, x, y);
+      if (index === this.activeItem) {
+        const overhang = 4;
+        const padding = 3;
+        ctx.fillRect(
+          x - overhang,
+          y + padding,
+          measurement.width + overhang * 2,
+          1
+        );
+      }
+    });
+    ctx.restore();
   }
 }
 
@@ -355,7 +467,7 @@ class ScorePanel {
       return;
     }
     ctx.save();
-    ctx.fillStyle = "#00cb00";
+    ctx.fillStyle = "hsl(120, 100%, 40%)";
     ctx.font = "24px SyntheticText";
     ctx.fillText(this.player.currentScore.toString(), this.x, this.y);
     ctx.restore();
@@ -710,6 +822,8 @@ const CONTROLS = {
   ROTATE_LEFT: "q",
   ROTATE_RIGHT: "e",
   FIRE: " ",
+  PAUSE: "Escape",
+  ACTIVATE: "Enter",
 } as const;
 
 const CONTROLS_BUTTONS = {
@@ -720,6 +834,8 @@ const CONTROLS_BUTTONS = {
   [CONTROLS.ROTATE_LEFT]: "ROTATE_LEFT",
   [CONTROLS.ROTATE_RIGHT]: "ROTATE_RIGHT",
   [CONTROLS.FIRE]: "FIRE",
+  [CONTROLS.PAUSE]: "PAUSE",
+  [CONTROLS.ACTIVATE]: "ACTIVATE",
 } as const;
 
 class KeyboardInputController {
@@ -730,6 +846,8 @@ class KeyboardInputController {
   init() {
     document.addEventListener("keydown", (e: KeyboardEvent) => {
       switch (e.key) {
+        case CONTROLS.PAUSE:
+        case CONTROLS.ACTIVATE:
         case CONTROLS.FIRE:
         case CONTROLS.UP:
         case CONTROLS.DOWN:
@@ -744,6 +862,8 @@ class KeyboardInputController {
     });
     document.addEventListener("keyup", (e: KeyboardEvent) => {
       switch (e.key) {
+        case CONTROLS.PAUSE:
+        case CONTROLS.ACTIVATE:
         case CONTROLS.FIRE:
         case CONTROLS.UP:
         case CONTROLS.DOWN:
