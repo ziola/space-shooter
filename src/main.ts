@@ -1,8 +1,6 @@
 import "./style.css";
 
 class Game {
-  private loop: GameLoop | null;
-
   player: Player | null;
   projectiles: Projectile[];
   enemies: Enemy[];
@@ -31,8 +29,8 @@ class Game {
     this.explosions = [];
     this.keyboardInputController = new KeyboardInputController();
     this.assetManager = new AssetManager();
-    this.livesPanel = new LivesPanel(this);
-    this.scorePanel = new ScorePanel(this);
+    this.livesPanel = null;
+    this.scorePanel = null;
     this.menuPanel = new MenuPanel(this);
 
     this.endGame = this.endGame.bind(this);
@@ -43,10 +41,7 @@ class Game {
     this.loop = gameLoop;
     this.keyboardInputController.init();
     this.assetManager.init();
-    this.menuPanel?.init([
-      { label: "START", onActivate: this.startGame },
-      { label: "CREDITS", onActivate: () => alert("TODO: CREDITS") },
-    ]);
+    this.menuPanel?.init([{ label: "START", onActivate: this.startGame }]);
     this.isPaused = true;
   }
   render(ctx: CanvasRenderingContext2D) {
@@ -79,7 +74,7 @@ class Game {
       this.spawnEnemy(deltaTime);
     }
     if (this.isPlayerKilled && this.explosions.length === 0) {
-      this.respawn();
+      this.spawnPlayer();
     }
     this.explosions.forEach((explosion) => explosion.update(deltaTime));
   }
@@ -87,7 +82,6 @@ class Game {
     this.update(deltaTime);
     this.render(context!);
   }
-
   spawnEnemy(deltaTime: number) {
     if (
       this.timeFromLastEnemySpawned < this.enemySpawnFrequency ||
@@ -145,7 +139,6 @@ class Game {
     }
     this.explosions.splice(explosionIndex, 1);
   }
-
   enemyKilled(enemy: Enemy, projectile: Projectile) {
     this.removeEnemy(enemy);
     this.removeProjectile(projectile);
@@ -155,16 +148,20 @@ class Game {
   startGame() {
     this.keyboardInputController.reset();
     this.player = new Player(this);
-    // this.livesPanel = new LivesPanel(this);
-    this.livesPanel?.init(this.player, this.width - 10, this.height - 10);
-    // this.scorePanel = new ScorePanel(this);
-    this.scorePanel?.init(this.player, 8, 24);
-    this.respawn();
+    if (!this.livesPanel) {
+      this.livesPanel = new LivesPanel(this);
+    }
+    this.livesPanel.init(this.player, this.width - 10, this.height - 10);
+    if (!this.scorePanel) {
+      this.scorePanel = new ScorePanel(this);
+    }
+    this.scorePanel.init(this.player, 8, 24);
+    this.spawnPlayer();
     this.timeFromLastEnemySpawned = Infinity;
     this.isPaused = false;
   }
 
-  respawn() {
+  spawnPlayer() {
     this.player?.init(this.width * 0.5, this.height * 0.5, 32, 32, 5, 6, 0);
     this.projectiles = [];
     this.enemies = [];
@@ -179,7 +176,6 @@ class Game {
 
   endGame() {
     this.killPlayer();
-    this.isPaused = true;
     this.menuPanel?.init([
       { label: "NEW GAME", onActivate: this.startGame },
       { label: "CREDITS", onActivate: this.endGame },
@@ -1019,7 +1015,6 @@ async function loadAssets() {
   return Promise.resolve();
 }
 
-//TODO refactor into proper asset manager
 const canvas = document.querySelector("#canvas") as HTMLCanvasElement;
 canvas.width = 640;
 canvas.height = 480;
